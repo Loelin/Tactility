@@ -1,5 +1,3 @@
-#include "bluetooth_reconnect.h"
-
 #include <tactility/module.h>
 
 // Defined in expander_reset.cpp (C++ linkage).
@@ -11,12 +9,10 @@ static error_t start() {
     // The panel/touch reset lines hang off the TCA9554 expander, so release them before the kernel
     // starts the devicetree's display and touch devices.
     waveshare_amoled18_expander_reset();
-    waveshare_bluetooth_reconnect_start();
     return ERROR_NONE;
 }
 
 static error_t stop() {
-    waveshare_bluetooth_reconnect_stop();
     return ERROR_NONE;
 }
 
