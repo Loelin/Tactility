@@ -31,3 +31,17 @@ properties:
     type: phandles
     default: GPIO_PIN_SPEC_NONE
     description: Master clock pin
+  dma-desc-num:
+    type: int
+    default: 6
+    description: Number of DMA descriptors for standard-mode I2S (ESP-IDF default 6)
+  dma-frame-num:
+    type: int
+    default: 240
+    description: Frames per DMA descriptor for standard-mode I2S (ESP-IDF default 240)
+  pdm-highpass-cutoff-hz:
+    type: int
+    default: 0
+    description: >
+      PDM RX high-pass filter cutoff in Hz. 0 keeps the ESP-IDF default (35.5 Hz); the hardware
+      accepts the range 23..185 Hz.

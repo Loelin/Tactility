@@ -55,7 +55,7 @@ constexpr double APPROXIMATE_GRID_DEGREES = 0.02;
 // The worker waits this long for a stopping provider before it handles the other providers
 constexpr uint32_t STOP_WAIT_MS = 100;
 constexpr uint32_t UNREGISTER_POLL_MS = 10;
-constexpr size_t WORKER_STACK_SIZE = 4096;
+constexpr size_t WORKER_STACK_SIZE = 6144;
 
 struct GlobalMutex {
     Mutex handle {};
@@ -247,7 +247,8 @@ void reconcile() {
         return;
     }
 
-    // The worker doesn't access flash, so its stack can be in external memory
+    // Internal stack: step() reports locations, which emits system events whose listeners run
+    // synchronously on this thread and may access flash (unsafe with a PSRAM stack).
     mutex_lock(&settingsMutex.handle);
     ensureSettingsLoaded();
     mutex_unlock(&settingsMutex.handle);
@@ -258,7 +259,7 @@ void reconcile() {
         LOG_E(TAG, "Failed to allocate worker");
         return;
     }
-    thread_set_stack_external(worker, true);
+    thread_set_stack_external(worker, false);
     if (thread_start(worker) != ERROR_NONE) {
         LOG_E(TAG, "Failed to start worker");
         thread_free(worker);

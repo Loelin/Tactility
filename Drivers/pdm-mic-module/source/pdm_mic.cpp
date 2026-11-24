@@ -325,7 +325,7 @@ extern "C" {
 
 Driver pdm_mic_driver = {
     .name = "pdm_mic",
-    .compatible = (const char*[]) { "generic,spm1423", nullptr },
+    .compatible = (const char*[]) { "generic,spm1423", "tdk,t3902", nullptr },
     .start_device = start_device,
     .stop_device = stop_device,
     .probe = nullptr,

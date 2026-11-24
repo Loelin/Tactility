@@ -1,0 +1,35 @@
+description: >
+  Hynitron CST92xx (CST9217/CST9220) capacitive touch controller. Minimal single-touch port of
+  the vendor's TouchDrvCST92xx protocol (as shipped in LilyGoLib/SensorLib).
+
+include: ["i2c-device.yaml"]
+
+compatible: "hynitron,cst92xx"
+
+bus: i2c
+
+properties:
+  x-max:
+    type: int
+    required: true
+    description: Maximum X coordinate reported by the controller (typically the panel's horizontal resolution)
+  y-max:
+    type: int
+    required: true
+    description: Maximum Y coordinate reported by the controller (typically the panel's vertical resolution)
+  swap-xy:
+    type: boolean
+    default: false
+    description: Swap the X and Y axes
+  mirror-x:
+    type: boolean
+    default: false
+    description: Mirror the X axis
+  mirror-y:
+    type: boolean
+    default: false
+    description: Mirror the Y axis
+  pin-reset:
+    type: phandles
+    required: true
+    description: Reset GPIO pin (may be an I/O-expander pin). The chip only re-initializes after a clean reset pulse.

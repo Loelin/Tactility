@@ -166,6 +166,7 @@ static error_t present(Co5300Internal* internal, int32_t x_start, int32_t y_star
     // transfer that's still in flight.
     xSemaphoreTake(internal->draw_done_semaphore, portMAX_DELAY);
     spi_controller_unlock(internal->spi_controller);
+
     return ERROR_NONE;
 }
 
@@ -319,8 +320,10 @@ static error_t start(Device* device) {
             .sio_mode = 0,
             // The LVGL color buffer lives in PSRAM. Without this the SPI
             // driver bounces every chunk through a freshly-allocated internal DMA buffer, which is
-            // both slower and can fail when internal RAM is tight. ESP32-S31 can DMA from PSRAM.
-            .psram_dma_direct = 1,
+            // both slower and can fail when internal RAM is tight. The S3's controller can DMA from
+            // PSRAM directly, but its PSRAM path has a speed limit, so this is a devicetree switch
+            // (`psram-dma-direct`) that the board can benchmark.
+            .psram_dma_direct = config->psram_dma_direct ? 1U : 0U,
             .lsb_first = 0,
             .cs_high_active = 0,
         },
@@ -432,8 +435,9 @@ static error_t start(Device* device) {
         LOG_W(TAG, "Failed to allocate clear buffer; leaving panel GRAM undefined");
     }
 
-    LOG_I(TAG, "CO5300 initialized: %dx%d reset=%d te=%d pixel_clock=%d Hz", config->horizontal_resolution,
-          config->vertical_resolution, pin_or_unused(config->pin_reset), pin_or_unused(config->pin_te), config->pixel_clock_hz);
+    LOG_I(TAG, "CO5300 initialized: %dx%d reset=%d te=%d pixel_clock=%d Hz psram_dma_direct_req=%d", config->horizontal_resolution,
+          config->vertical_resolution, pin_or_unused(config->pin_reset), pin_or_unused(config->pin_te), config->pixel_clock_hz,
+          config->psram_dma_direct ? 1 : 0);
     return ERROR_NONE;
 }
 

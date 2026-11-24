@@ -16,6 +16,9 @@ struct Esp32I2sConfig {
     struct GpioPinSpec pin_data_out;
     struct GpioPinSpec pin_data_in;
     struct GpioPinSpec pin_mclk;
+    uint32_t dma_desc_num;
+    uint32_t dma_frame_num;
+    uint32_t pdm_highpass_cutoff_hz;
 };
 
 #ifdef __cplusplus

@@ -1,0 +1,333 @@
+/dts-v1/;
+
+#include <tactility/bindings/root.h>
+#include <tactility/bindings/esp32_ble.h>
+#include <tactility/bindings/esp32_wifi_pinned.h>
+#include <tactility/bindings/esp32_gpio.h>
+#include <tactility/bindings/esp32_i2c_master.h>
+#include <tactility/bindings/esp32_i2s.h>
+#include <tactility/bindings/esp32_sleep.h>
+#include <tactility/bindings/esp32_spi.h>
+#include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/esp32_uart.h>
+#include <tactility/bindings/esp32_usbdevice.h>
+#include <tactility/bindings/esp32_flash_fatfs.h>
+#include <tactility/bindings/gpio_hog.h>
+#include <bindings/axp2101.h>
+#include <bindings/axp2101_pwrkey.h>
+#include <tactility/drivers/input_codes.h>
+#include <bindings/pcf85063.h>
+#include <bindings/xl9555.h>
+#include <bindings/drv2605.h>
+#include <bindings/co5300.h>
+#include <bindings/co5300_backlight.h>
+#include <bindings/cst92xx.h>
+#include <bindings/sx1262.h>
+#include <bindings/dummy_i2s_amp.h>
+#include <bindings/pdm_mic.h>
+#include <bindings/bhi260ap.h>
+#include <gps_generic/bindings.h>
+
+// Reference: https://github.com/Xinyuan-LilyGO/LilyGoLib/blob/master/docs/hardware/lilygo-t-watch-ultra.md
+// Pin map: espressif/arduino-esp32 variants/lilygo_twatch_ultra/pins_arduino.h
+
+// GPIO_FLAG_ACTIVE_LOW | GPIO_FLAG_PULL_UP. The devicetree parser doesn't evaluate '|' inside a
+// cell, so keep the combined value here instead of composing it at the use site.
+#define WAKEUP_BUTTON_FLAGS 9
+
+/ {
+	compatible = "root";
+	model = "LilyGO T-Watch Ultra";
+
+	// User data lives on the internal flash FAT partition (root path /data).
+	flash_fatfs0 {
+		compatible = "espressif,esp32-flash-fatfs";
+		partition-label = "data";
+		mount-path = "/data";
+	};
+
+	wifi0 {
+		compatible = "espressif,esp32-wifi-pinned";
+	};
+
+	ble0 {
+		compatible = "espressif,esp32-ble";
+	};
+
+	gpio0 {
+		compatible = "espressif,esp32-gpio";
+		gpio-count = <49>;
+	};
+
+	// The PWR button is the AXP2101 PWRKEY. Its IRQ output is GPIO7 (active low), so a short
+	// press can wake the ESP32 from deep sleep. Board code enables only the PWRKEY short-press
+	// interrupt and clears stale status before sleeping.
+	sleep {
+		compatible = "espressif,esp32-sleep";
+		wakeup-gpios = <&gpio0 7 WAKEUP_BUTTON_FLAGS>;
+	};
+
+	// MAX98357A speaker amplifier: BCLK=9, WCLK=10, DOUT=11. No MCLK and no mic input.
+	i2s0 {
+		compatible = "espressif,esp32-i2s";
+		port = <I2S_NUM_1>;
+		pin-bclk = <&gpio0 9 GPIO_FLAG_NONE>;
+		pin-ws = <&gpio0 10 GPIO_FLAG_NONE>;
+		pin-data-out = <&gpio0 11 GPIO_FLAG_NONE>;
+		// 8 x 512 frames = 16 KB (~93 ms at 44.1 kHz stereo). Each descriptor stays at
+		// 2 KB, inside the 4 KB per-descriptor limit.
+		dma-desc-num = <8>;
+		dma-frame-num = <512>;
+	};
+
+	// TDK T3902 PDM microphone: SCK=17 doubles as the PDM clock, DATA=18. PDM RX is
+	// hardware-restricted to I2S controller 0, so it gets its own node (the speaker is on
+	// I2S_NUM_1).
+	i2s1 {
+		compatible = "espressif,esp32-i2s";
+		port = <I2S_NUM_0>;
+		pin-ws = <&gpio0 17 GPIO_FLAG_NONE>;
+		pin-data-in = <&gpio0 18 GPIO_FLAG_NONE>;
+		// PDM RX hardware high-pass at 55 Hz (ESP-IDF default is 35.5 Hz).
+		pdm-highpass-cutoff-hz = <55>;
+	};
+
+	microphone0 {
+		compatible = "tdk,t3902";
+		i2s = <&i2s1>;
+		channels = <1>;
+		// The T3902 is hotter than the SPM1423 the driver's 4x default was tuned for, but
+		// the recordings are still quiet. 7x for level; watch for clipping on loud speech.
+		input-gain-percent = <700>;
+	};
+
+	// Shared I2C bus: touch, expander, smart sensor, PMU, RTC and haptics.
+	// 400 kHz: the BHI260AP uploads ~100 KB of firmware over this bus at boot.
+	i2c0 {
+		compatible = "espressif,esp32-i2c-master";
+		port = <I2C_NUM_0>;
+		clock-frequency = <400000>;
+		pin-sda = <&gpio0 3 GPIO_FLAG_PULL_UP>;
+		pin-scl = <&gpio0 2 GPIO_FLAG_PULL_UP>;
+
+		// XL9555 16-bit I/O expander. The panel/touch/haptic power and reset lines hang off it,
+		// so the rails are enabled here before the display, touch and haptic drivers start.
+		xl9555: xl9555 {
+			compatible = "xlsemi,xl9555";
+			reg = <0x20>;
+
+			haptic_enable {
+				compatible = "gpio-hog";
+				pin = <&xl9555 6 GPIO_FLAG_NONE>;
+				mode = <GPIO_HOG_MODE_OUTPUT_HIGH>;
+			};
+
+			display_power_enable {
+				compatible = "gpio-hog";
+				pin = <&xl9555 7 GPIO_FLAG_NONE>;
+				mode = <GPIO_HOG_MODE_OUTPUT_HIGH>;
+			};
+
+			// Selects the built-in LoRa antenna (low = USB RF path).
+			lora_antenna_select {
+				compatible = "gpio-hog";
+				pin = <&xl9555 11 GPIO_FLAG_NONE>;
+				mode = <GPIO_HOG_MODE_OUTPUT_HIGH>;
+			};
+		};
+
+		// AXP2101 PMIC: ALDO1=SD, ALDO2=display, ALDO3=LoRa, ALDO4=sensor, BLDO1=GNSS,
+		// BLDO2=speaker, DLDO1=NFC.
+		axp2101: axp2101 {
+			compatible = "x-powers,axp2101";
+			reg = <0x34>;
+			aldo1-millivolt = <3300>;
+			aldo1-enabled;
+			aldo2-millivolt = <3300>;
+			aldo2-enabled;
+			aldo3-millivolt = <3300>;
+			aldo3-enabled;
+			aldo4-millivolt = <1800>;
+			aldo4-enabled;
+			bldo1-millivolt = <3300>;
+			bldo1-enabled;
+			bldo2-millivolt = <3300>;
+			bldo2-enabled;
+			dldo1-enabled;
+
+			// The PWR button is the AXP2101 PWRKEY. Expose its short press as a kernel button so
+			// core standby can use it as a wake source and ButtonActions can open the power menu.
+			pwrkey {
+				compatible = "x-powers,axp2101-pwrkey";
+				short-press-code = <BUTTON_KEY_POWER>;
+			};
+		};
+
+		pcf85063: pcf85063 {
+			compatible = "nxp,pcf85063";
+			reg = <0x51>;
+		};
+
+		drv2605: drv2605 {
+			compatible = "ti,drv2605";
+			reg = <0x5A>;
+			autoplay;
+		};
+
+		// Hynitron CST9217 touch controller. Reset is routed through the XL9555 (pin 8).
+		touch0 {
+			compatible = "hynitron,cst92xx";
+			reg = <0x1A>;
+			x-max = <410>;
+			y-max = <502>;
+			pin-reset = <&xl9555 8 GPIO_FLAG_NONE>;
+		};
+
+		// Bosch BHI260AP smart sensor (6-axis IMU + sensor hub).
+		// Firmware is loaded at start-up; see Drivers/bhi260ap-module/README.md.
+		imu0 {
+			compatible = "bosch,bhi260ap";
+			reg = <0x28>;
+			// Sensor frame -> device frame. The raw sensor X/Y axes are rotated 90 degrees
+			// clockwise from the UI frame, and its Z axis points into the device (bottom-layer
+			// mount). Rotate X/Y by +90 degrees (x' = -y, y' = x) and invert Z.
+			mount-matrix = <0 -1 0 1 0 0 0 0 -1>;
+			pin-interrupt = <&gpio0 8 GPIO_FLAG_NONE>;
+		};
+	};
+
+	// CO5300 AMOLED on QSPI: CS=41, SCK=40, D0..D3=38,39,42,45, RST=37, TE=6.
+	spi2 {
+		compatible = "espressif,esp32-spi";
+		host = <SPI2_HOST>;
+		cs-gpios = <&gpio0 41 GPIO_FLAG_NONE>;
+		pin-mosi = <&gpio0 38 GPIO_FLAG_NONE>;
+		pin-miso = <&gpio0 39 GPIO_FLAG_NONE>;
+		pin-wp = <&gpio0 42 GPIO_FLAG_NONE>;
+		pin-hd = <&gpio0 45 GPIO_FLAG_NONE>;
+		pin-sclk = <&gpio0 40 GPIO_FLAG_NONE>;
+		// A frame is 410 * 502 * 2 = 411,640 bytes and esp_lcd chunk-splits it at
+		// max-transfer-size. The panel IO still bounces each chunk through internal DMA RAM
+		// (psram-dma-direct is cleared below), and queue depth 1 frees that bounce buffer in
+		// spi_device_get_trans_result() before the next chunk is allocated, so the peak internal
+		// demand is one chunk, not one per queue slot. That matters when Wi-Fi, BLE and an app are
+		// all running: internal DMA RAM then drops to ~11 KB free with a largest block of ~4.6 KB,
+		// and two in-flight 4 KB chunks start failing with
+		// "Failed to allocate priv TX buffer" - which silently drops that part of the screen
+		// because DisplayApi's draw_bitmap returns an error the flush path does not retry.
+		// 2 KB chunks keep the peak at one 2 KB alignment-rounded allocation, which still fits
+		// when the largest block is fragmented down to ~2.5 KB. The per-chunk bounce copy and
+		// completion round trip cost more than the 2 KB transfer itself, but a 16-row full-width
+		// strip is only 7 chunks (~1.5 ms), so interactive updates stay far below a 60 Hz frame.
+		max-transfer-size = <2048>;
+
+		display0: display@0 {
+			compatible = "chipone,co5300";
+			horizontal-resolution = <410>;
+			vertical-resolution = <502>;
+			// The visible area is the cover glass opening, which overlaps the corners of the
+			// 410x502 AMOLED. Core derives the corner inset as r * (1 - 1/sqrt(2)), so 72 px
+			// yields the ~21 px inset that matches the display.
+			shape = <DISPLAY_SHAPE_ROUNDED>;
+			corner-radius = <72>;
+			gap-x = <22>;
+			gap-y = <0>;
+			// The CO5300 datasheet specifies a 20 ns minimum QSPI write cycle and a 50 MHz
+			// maximum 4-wire SCL; 80 MHz produced corrupted (skewed) writes. 45 MHz is LilyGo's
+			// own default and stays inside the limit.
+			pixel-clock-hz = <45000000>;
+			pin-reset = <&gpio0 37 GPIO_FLAG_NONE>;
+			// Display TE is GPIO 6. Every flush waits for a V-blank, then presents a full-width
+			// strip covering only the dirty rows. Narrow sub-width windows shear on this panel, so
+			// the board rounds dirty areas to full-width strips (source/lvgl_flush_align.cpp)
+			// before handing them to the core's PARTIAL-mode flush. With the full-height buffer
+			// (lvgl.drawBufferLines=502) a full-screen refresh is one TE-waited band.
+			pin-te = <&gpio0 6 GPIO_FLAG_NONE>;
+			// 1, not 2: the panel IO keeps transaction-queue-depth bounce buffers alive at once,
+			// and one chunk's worth is all this board can guarantee under app + Wi-Fi + BLE load.
+			transaction-queue-depth = <1>;
+			// psram-dma-direct is left at its false default: on the S3 the SPI DMA underflows
+			// when reading PSRAM ("DMA TX underflow detected" and no panel output), so esp_lcd
+			// must bounce each chunk through internal RAM. That bounce is why the chunk size
+			// above is bounded by internal DMA RAM.
+			// LilyGoLib's LilyGoWatchUltra bring-up sequence for this panel, in the component's
+			// flattened [cmd, data-length, delay-ms, data...] encoding.
+			init-sequence = [
+				0xFE 0x01 0x00 0x00
+				0xC4 0x01 0x00 0x80
+				0x3A 0x01 0x00 0x55
+				0x35 0x01 0x00 0x00
+				0x53 0x01 0x0A 0x20
+				0x63 0x01 0x0A 0xFF
+				0x2A 0x04 0x00 0x00 0x16 0x01 0xAF
+				0x2B 0x04 0x00 0x00 0x00 0x01 0xF5
+				0x11 0x00 0x78
+				0x29 0x00 0x0A
+				0x51 0x01 0x00 0x00
+			];
+
+			// The CO5300 has no backlight pin; brightness is a panel command. The driver finds
+			// this child device via the display's children, and the backlight uses its parent.
+			display_backlight {
+				compatible = "co5300-backlight";
+				brightness-default = <255>;
+			};
+		};
+	};
+
+	// Shared SPI bus: SD card (CS=21) and SX1262 LoRa (CS=36).
+	spi3 {
+		compatible = "espressif,esp32-spi";
+		host = <SPI3_HOST>;
+		cs-gpios = <&gpio0 21 GPIO_FLAG_NONE>,
+		           <&gpio0 36 GPIO_FLAG_NONE>;
+		pin-mosi = <&gpio0 34 GPIO_FLAG_NONE>;
+		pin-miso = <&gpio0 33 GPIO_FLAG_NONE>;
+		pin-sclk = <&gpio0 35 GPIO_FLAG_NONE>;
+		max-transfer-size = <4096>;
+
+		sdcard@0 {
+			compatible = "espressif,esp32-sdspi";
+			frequency-khz = <20000>;
+		};
+
+		// SX1262 LoRa transceiver: CS=36, RST=47, BUSY=48, DIO1=14.
+		// TODO: confirm whether the module fits a TCXO and its voltage.
+		radio@1 {
+			compatible = "semtech,sx1262";
+			reg = <1>;
+			spi-frequency-khz = <4000>;
+			pin-reset = <&gpio0 47 GPIO_FLAG_NONE>;
+			pin-dio1 = <&gpio0 14 GPIO_FLAG_NONE>;
+			pin-busy = <&gpio0 48 GPIO_FLAG_NONE>;
+		};
+	};
+
+	// u-blox MIA-M10Q GNSS on UART1: TX=43, RX=44, PPS=13.
+	uart1 {
+		compatible = "espressif,esp32-uart";
+		port = <UART_NUM_1>;
+		pin-tx = <&gpio0 43 GPIO_FLAG_NONE>;
+		pin-rx = <&gpio0 44 GPIO_FLAG_NONE>;
+
+		gps {
+			compatible = "tactility,gps-generic";
+			baud-rate = <38400>;
+			model = <12>; // GPS_MODEL_UBLOX10 (u-blox MIA-M10Q)
+		};
+	};
+
+	// MAX98357A class-D speaker amplifier. SD_MODE is tied high in hardware.
+	speaker0 {
+		compatible = "maxim,max98357a";
+		i2s = <&i2s0>;
+	};
+
+	usbdevice0 {
+		compatible = "espressif,esp32-usbdevice";
+
+		usbdevicemsc0 {
+			compatible = "espressif,esp32-usbdevice-msc";
+		};
+	};
+};

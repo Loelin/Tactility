@@ -17,6 +17,7 @@ TEST_CASE("buttons don't wake the device by default") {
     CHECK(isWakeDefault(WakeKind::Keyboard));
     CHECK(isWakeDefault(WakeKind::Touch));
     CHECK(isWakeDefault(WakeKind::Encoder));
+    CHECK(isWakeDefault(WakeKind::Motion));
     CHECK_FALSE(isWakeDefault(WakeKind::Button));
 }
 

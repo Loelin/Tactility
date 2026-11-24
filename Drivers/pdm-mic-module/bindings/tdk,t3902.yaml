@@ -1,0 +1,17 @@
+description: TDK T3902 PDM MEMS microphone, I2S PDM RX input
+
+compatible: "tdk,t3902"
+
+properties:
+  i2s:
+    type: phandle
+    required: true
+    description: "I2S controller device that carries audio data"
+  channels:
+    type: int
+    default: 1
+    description: "Number of PDM mics wired (1 = mono, 2 = stereo)"
+  input-gain-percent:
+    type: int
+    default: 400
+    description: "Digital gain multiplier applied by audio_stream, as an integer percentage (100 = 1.0x, 400 = 4.0x). PDM mics have no hardware gain."

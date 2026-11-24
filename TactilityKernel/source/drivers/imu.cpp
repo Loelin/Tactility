@@ -27,6 +27,19 @@ error_t imu_read_temperature(Device* device, float* temperature_c) {
     return api->read_temperature(device, temperature_c);
 }
 
+error_t imu_read_motion(Device* device, ImuMotionData* data) {
+    const auto* driver = device_get_driver(device);
+    auto* api = IMU_DRIVER_API(driver);
+    if (!api->read_motion) return ERROR_NOT_SUPPORTED;
+    return api->read_motion(device, data);
+}
+
+bool imu_supports_motion(Device* device) {
+    const auto* driver = device_get_driver(device);
+    auto* api = IMU_DRIVER_API(driver);
+    return api->read_motion != nullptr;
+}
+
 const DeviceType IMU_TYPE {
     .name = "imu"
 };

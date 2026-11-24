@@ -304,6 +304,8 @@ const struct ModuleSymbol KERNEL_SYMBOLS[] = {
     DEFINE_MODULE_SYMBOL(imu_read_accel),
     DEFINE_MODULE_SYMBOL(imu_read_gyro),
     DEFINE_MODULE_SYMBOL(imu_read_temperature),
+    DEFINE_MODULE_SYMBOL(imu_read_motion),
+    DEFINE_MODULE_SYMBOL(imu_supports_motion),
     DEFINE_MODULE_SYMBOL(IMU_TYPE),
     // drivers/button
     DEFINE_MODULE_SYMBOL(button_emit_event),

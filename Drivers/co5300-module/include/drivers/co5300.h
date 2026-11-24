@@ -36,6 +36,12 @@ struct Co5300Config {
     bool invert_color;
     uint32_t pixel_clock_hz;
     uint8_t transaction_queue_depth;
+    /**
+     * Let the SPI controller DMA straight out of PSRAM instead of bouncing each chunk through
+     * internal RAM. No per-transfer allocation, but the controller's PSRAM path is slower than
+     * internal memory, so this is a devicetree switch rather than a hardcoded choice.
+     */
+    bool psram_dma_direct;
 
     struct GpioPinSpec pin_reset;
 

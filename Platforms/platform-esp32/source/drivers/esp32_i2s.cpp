@@ -212,11 +212,24 @@ static error_t set_config(Device* device, const struct I2sConfig* config) {
     internal->rx_tdm_mode = false;
 #endif
 
-    // Create new channel handles
+    // Create new channel handles. Only create an RX channel when the controller has a data
+    // input: a playback-only controller (e.g. a MAX98357A speaker amp) otherwise gets an unused
+    // RX channel that ESP-IDF constitutes into full-duplex, switching one channel to slave and
+    // disturbing the shared BCLK/WS. That shows up as periodic clicks during playback.
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(dts_config->port, I2S_ROLE_MASTER);
     // An underrun sends silence instead of repeating the last buffer, which would be audible as a buzz
     chan_cfg.auto_clear_after_cb = true;
-    esp_err_t esp_error = i2s_new_channel(&chan_cfg, &internal->tx_handle, &internal->rx_handle);
+    // ESP-IDF's 6 x 240 defaults give only ~33 ms at 44.1 kHz stereo. Boards that feed the
+    // stream in large chunks (e.g. a WAV player reading from SD) set a deeper ring so a
+    // blocking file read doesn't underrun the amplifier.
+    if (dts_config->dma_desc_num > 0) {
+        chan_cfg.dma_desc_num = dts_config->dma_desc_num;
+    }
+    if (dts_config->dma_frame_num > 0) {
+        chan_cfg.dma_frame_num = dts_config->dma_frame_num;
+    }
+    i2s_chan_handle_t* rx_channel = (internal->data_in_descriptor != nullptr) ? &internal->rx_handle : nullptr;
+    esp_err_t esp_error = i2s_new_channel(&chan_cfg, &internal->tx_handle, rx_channel);
     if (esp_error != ESP_OK) {
         LOG_E(TAG, "Failed to create I2S channels: %s", esp_err_to_name(esp_error));
         unlock(internal);
@@ -510,6 +523,14 @@ static error_t set_rx_pdm_config(Device* device, const struct I2sPdmRxConfig* co
             },
         },
     };
+
+#if SOC_I2S_SUPPORTS_PDM_RX_HP_FILTER
+    // The board can tune the PDM RX high-pass cutoff; 0 keeps ESP-IDF's 35.5 Hz default.
+    if (dts_config->pdm_highpass_cutoff_hz > 0) {
+        pdm_cfg.slot_cfg.hp_en = true;
+        pdm_cfg.slot_cfg.hp_cut_off_freq_hz = (float) dts_config->pdm_highpass_cutoff_hz;
+    }
+#endif
 
     esp_error = i2s_channel_init_pdm_rx_mode(new_rx, &pdm_cfg);
     if (esp_error == ESP_OK) esp_error = i2s_channel_enable(new_rx);

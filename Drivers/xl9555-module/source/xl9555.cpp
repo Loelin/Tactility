@@ -7,6 +7,9 @@
 #include <tactility/drivers/i2c_controller.h>
 #include <tactility/log.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #define TAG "XL9555"
 
 #define GET_CONFIG(device) (static_cast<const Xl9555Config*>((device)->config))
@@ -37,6 +40,26 @@ static error_t stop(Device* device) {
     return ERROR_NONE;
 }
 
+// The expander can NAK its first transaction after its supply comes up: on the T-Watch Ultra the
+// AXP2101 enables that rail late in boot, and a failed write then fails the gpio-hog device and
+// aborts kernel init. Retry briefly before reporting the error. set/reset_bits() are read-modify-
+// write but idempotent for a single bit, so repeating a partially applied attempt is safe.
+constexpr int WRITE_ATTEMPTS = 3;
+
+static error_t write_bits(Device* parent, uint8_t address, uint8_t reg, uint8_t bits, bool set) {
+    error_t error = ERROR_NONE;
+    for (int attempt = 0; attempt < WRITE_ATTEMPTS; attempt++) {
+        error = set
+            ? i2c_controller_register8_set_bits(parent, address, reg, bits, portMAX_DELAY)
+            : i2c_controller_register8_reset_bits(parent, address, reg, bits, portMAX_DELAY);
+        if (error == ERROR_NONE) {
+            return ERROR_NONE;
+        }
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    return error;
+}
+
 extern "C" {
 
 static error_t set_level(GpioDescriptor* descriptor, bool high) {
@@ -53,9 +76,7 @@ static error_t set_level(GpioDescriptor* descriptor, bool high) {
     // The output port has no polarity inversion, so active-low outputs are inverted here.
     // Read under the lock, as set_flags() can change the polarity.
     const bool physical_high = (descriptor->flags & GPIO_FLAG_ACTIVE_LOW) != 0 ? !high : high;
-    error_t err = physical_high
-        ? i2c_controller_register8_set_bits(parent, address, reg, bit, portMAX_DELAY)
-        : i2c_controller_register8_reset_bits(parent, address, reg, bit, portMAX_DELAY);
+    error_t err = write_bits(parent, address, reg, bit, physical_high);
     device_unlock(device);
     return err;
 }
@@ -97,11 +118,7 @@ static error_t set_flags(GpioDescriptor* descriptor, gpio_flags_t flags) {
     device_lock(device);
 
     // Direction: configuration bit is 1 for input, 0 for output.
-    if (flags & GPIO_FLAG_DIRECTION_OUTPUT) {
-        err = i2c_controller_register8_reset_bits(parent, address, config_reg, bit, portMAX_DELAY);
-    } else {
-        err = i2c_controller_register8_set_bits(parent, address, config_reg, bit, portMAX_DELAY);
-    }
+    err = write_bits(parent, address, config_reg, bit, (flags & GPIO_FLAG_DIRECTION_OUTPUT) == 0);
 
     if (err != ERROR_NONE) {
         device_unlock(device);
@@ -109,11 +126,7 @@ static error_t set_flags(GpioDescriptor* descriptor, gpio_flags_t flags) {
     }
 
     // Input polarity inversion, so get_level() reports the logical level of active-low pins
-    if (flags & GPIO_FLAG_ACTIVE_LOW) {
-        err = i2c_controller_register8_set_bits(parent, address, polarity_reg, bit, portMAX_DELAY);
-    } else {
-        err = i2c_controller_register8_reset_bits(parent, address, polarity_reg, bit, portMAX_DELAY);
-    }
+    err = write_bits(parent, address, polarity_reg, bit, (flags & GPIO_FLAG_ACTIVE_LOW) != 0);
 
     // set_level() reads the polarity from the descriptor
     if (err == ERROR_NONE) {

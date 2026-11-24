@@ -249,13 +249,16 @@ void* create(LocationHost* host) {
     }
     provider->host = host;
     provider->running = true;
-    provider->thread = thread_alloc_full("location_gps", 4096, threadMain, provider, -1);
+    provider->thread = thread_alloc_full("location_gps", 6144, threadMain, provider, -1);
     if (provider->thread == nullptr) {
         tt::deleteObject(provider);
         return nullptr;
     }
-    // Settings are loaded before providers start, so the thread doesn't access flash
-    thread_set_stack_external(provider->thread, true);
+    // The stack must stay in internal RAM: this thread emits system events (location time, position)
+    // whose listeners run synchronously on it and may access flash (e.g. GpsTimeSyncService ->
+    // NTP -> preferences -> FAT). Any flash operation with a stack in PSRAM trips
+    // esp_task_stack_is_sane_cache_disabled() in spi_flash and aborts.
+    thread_set_stack_external(provider->thread, false);
 
     recursive_mutex_lock(&mutex.handle);
     instance = provider;

@@ -1,0 +1,7 @@
+dependencies:
+  # The core manifest enables this only for the S31 Mosaico. The T-Watch Ultra is an S3 board
+  # that uses the same CO5300 driver, so it is requested here instead of editing the core.
+  espressif/esp_lcd_co5300:
+    version: "2.2.0"
+    rules:
+      - if: "target == esp32s3"

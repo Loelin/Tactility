@@ -131,6 +131,12 @@ def write_partition_table(output_file, device_properties: dict, is_dev: bool):
     if flash_size_number == "4" and uses_data_partition:
         exit_with_error("4MB devices must use an external storage.path such as /sdcard; there is no internal-storage partition table for 4MB flash")
     variant = "no-sd" if uses_data_partition else "with-sd"
+    if get_property_or_none(device_properties, "storage.modelPartition") == "true":
+        # A raw `model` partition for the on-device Whistle engine. Only use it when the
+        # table exists, so the property is safe in trees that don't carry the model table.
+        model_partition_filename = f"partitions-{flash_size_number}mb-{variant}-model.csv"
+        if os.path.isfile(model_partition_filename):
+            variant += "-model"
     partition_filename = f"partitions-{flash_size_number}mb-{variant}.csv"
     if is_dev:
         dev_partition_filename = f"partitions-{flash_size_number}mb-{variant}-dev.csv"

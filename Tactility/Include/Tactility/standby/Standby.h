@@ -13,7 +13,9 @@ namespace tt::standby {
 enum class WakeInput {
     Keyboard,
     Touch,
-    Button
+    Button,
+    /** An IMU that reports movement */
+    Motion
 };
 
 /** An input device that can wake the device */
@@ -32,7 +34,7 @@ bool isWakeGesture(Device* device);
 /** Ends the wake gesture of a button, which allows its next press to be an action */
 void endWakeGesture(Device* device);
 
-/** @return the keyboards, touch screens, encoders and buttons that are ready */
+/** @return the keyboards, touch screens, encoders, buttons and motion sensors that are ready */
 ::std::vector<WakeSource> findWakeSources();
 
 /** @return the wake sources that the settings enable */

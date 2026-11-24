@@ -15,6 +15,7 @@
 #include <tactility/drivers/button.h>
 #include <tactility/drivers/bluetooth.h>
 #include <tactility/drivers/display.h>
+#include <tactility/drivers/imu.h>
 #include <tactility/drivers/keyboard.h>
 #include <tactility/drivers/touch.h>
 #include <tactility/drivers/wifi.h>
@@ -85,11 +86,16 @@ void collect(const DeviceType* type, WakeInput input, ::std::vector<WakeSource>&
     device_for_each_of_type(type, &collector, [](Device* device, void* context) {
         auto* collector = static_cast<Collector*>(context);
         if (device_is_ready(device)) {
+            if (collector->input == WakeInput::Motion && !imu_supports_motion(device)) {
+                return true;
+            }
             WakeKind kind = WakeKind::Touch;
             if (collector->input == WakeInput::Button) {
                 kind = WakeKind::Button;
             } else if (collector->input == WakeInput::Keyboard) {
                 kind = keyboardKind(device);
+            } else if (collector->input == WakeInput::Motion) {
+                kind = WakeKind::Motion;
             }
             collector->sources->push_back({ device->name, kind, collector->input });
         }
@@ -125,11 +131,17 @@ bool isButtonPressed(Device* button) {
     return button_is_pressed(button, &pressed) == ERROR_NONE && pressed;
 }
 
+bool isMoving(Device* imu) {
+    ImuMotionData motion {};
+    return imu_read_motion(imu, &motion) == ERROR_NONE && motion.detected;
+}
+
 bool isActive(const Awake& awake) {
     switch (awake.input) {
         case WakeInput::Keyboard: return isKeyPressed(awake);
         case WakeInput::Touch: return isTouched(awake.device);
         case WakeInput::Button: return isButtonPressed(awake.device);
+        case WakeInput::Motion: return isMoving(awake.device);
     }
     return false;
 }
@@ -277,6 +289,7 @@ bool isActive() {
     collect(&KEYBOARD_TYPE, WakeInput::Keyboard, sources);
     collect(&TOUCH_TYPE, WakeInput::Touch, sources);
     collect(&BUTTON_TYPE, WakeInput::Button, sources);
+    collect(&IMU_TYPE, WakeInput::Motion, sources);
     return sources;
 }
 

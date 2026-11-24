@@ -1,0 +1,13 @@
+description: >
+  The power key of an AXP2101 PMIC exposed as a button device. Must be declared as a child node of
+  the axp2101 device whose PWRKEY it represents. The driver enables only the PWRKEY short-press
+  interrupt, polls its status bit and exposes it through the kernel Button API, so the core standby
+  and button-action services can use the power key like any other button.
+
+compatible: "x-powers,axp2101-pwrkey"
+
+properties:
+  short-press-code:
+    type: int
+    required: true
+    description: BUTTON_KEY_* code emitted for a short press

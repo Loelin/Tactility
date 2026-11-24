@@ -36,3 +36,15 @@ __pycache__
 .cache
 .ccache/
 .ccache-stats.txt
+
+# Local-only T-Watch Ultra dictation and TT9 input features (kept out of the branch)
+/Devices/lilygo-t-watch-ultra/source/voice_input.cpp
+/Devices/lilygo-t-watch-ultra/source/voice_input.h
+/Devices/lilygo-t-watch-ultra/source/voice_input_app.cpp
+/Devices/lilygo-t-watch-ultra/source/t9_keyboard.cpp
+/Devices/lilygo-t-watch-ultra/source/t9_keyboard.h
+/Devices/lilygo-t-watch-ultra/source/dictation_icon.cpp
+/Devices/lilygo-t-watch-ultra/tools/local-stt.sh
+/Devices/lilygo-t-watch-ultra/tools/local-stt-pi.sh
+/Devices/lilygo-t-watch-ultra/flash-model.sh
+/Modules/whistle-module/

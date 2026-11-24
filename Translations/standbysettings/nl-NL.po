@@ -36,6 +36,9 @@ msgstr "Touch"
 msgid "Encoder"
 msgstr "Draaiknop"
 
+msgid "Motion"
+msgstr "Beweging"
+
 msgid "Button"
 msgstr "Knop"
 

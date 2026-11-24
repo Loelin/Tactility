@@ -67,6 +67,7 @@ const char* getKindName(WakeKind kind) {
         case WakeKind::Touch: return tr("Touch");
         case WakeKind::Encoder: return tr("Encoder");
         case WakeKind::Button: return tr("Button");
+        case WakeKind::Motion: return tr("Motion");
     }
     return "";
 }

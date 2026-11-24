@@ -10,7 +10,9 @@ enum class WakeKind {
     Keyboard,
     Touch,
     Encoder,
-    Button
+    Button,
+    /** Movement reported by an IMU */
+    Motion
 };
 
 struct StandbySettings {
@@ -23,7 +25,7 @@ struct StandbySettings {
     ::std::map<::std::string, bool> wake;
 };
 
-/** Keyboards, touch and encoders wake the device, buttons don't */
+/** Keyboards, touch, encoders and IMU movement wake the device, buttons don't */
 bool isWakeDefault(WakeKind kind);
 
 bool isWakeEnabled(const StandbySettings& settings, const ::std::string& deviceName, WakeKind kind);

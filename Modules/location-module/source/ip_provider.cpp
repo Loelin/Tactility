@@ -273,10 +273,11 @@ void* create(LocationHost* host) {
         return nullptr;
     }
 
-    provider->thread = thread_alloc_full("location_ip", 4096, threadMain, provider, -1);
+    provider->thread = thread_alloc_full("location_ip", 6144, threadMain, provider, -1);
     if (provider->thread != nullptr) {
-        // Settings are loaded before providers start, so the thread doesn't access flash
-        thread_set_stack_external(provider->thread, true);
+        // Internal stack: this thread emits location system events, and their listeners run
+        // synchronously on it and may access flash (which is unsafe with a PSRAM stack).
+        thread_set_stack_external(provider->thread, false);
     }
     if (provider->thread == nullptr || thread_start(provider->thread) != ERROR_NONE) {
         if (provider->thread != nullptr) {

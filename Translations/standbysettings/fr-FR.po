@@ -36,6 +36,9 @@ msgstr "Tactile"
 msgid "Encoder"
 msgstr "Encodeur"
 
+msgid "Motion"
+msgstr "Mouvement"
+
 msgid "Button"
 msgstr "Bouton"
 

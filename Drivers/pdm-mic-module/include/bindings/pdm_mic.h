@@ -11,6 +11,7 @@ extern "C" {
 // One DEFINE_DEVICETREE per compatible string -- see dummy-i2s-amp-module's bindings
 // header for why this can't be unified into a single typedef name.
 DEFINE_DEVICETREE(spm1423, struct PdmMicConfig)
+DEFINE_DEVICETREE(t3902, struct PdmMicConfig)
 
 #ifdef __cplusplus
 }

@@ -50,6 +50,13 @@ properties:
     type: int
     default: 10
     description: Size of the internal SPI transaction queue
+  psram-dma-direct:
+    type: boolean
+    default: false
+    description: >
+      Let the SPI controller DMA straight out of PSRAM instead of bouncing each chunk through an
+      internal DMA buffer. Avoids per-transfer internal allocations, but the controller's PSRAM
+      path is speed-limited; benchmark against internal bouncing on a board.
   pin-reset:
     type: phandles
     default: GPIO_PIN_SPEC_NONE
